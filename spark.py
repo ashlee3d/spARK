@@ -1,5 +1,6 @@
 import os
 import random
+import webcolors
 import sparkutils #custom utility library
 import discord #discord api
 import requests #enable web requests
@@ -58,14 +59,6 @@ async def on_message(message):
 #----------------------------------------------
 # COMMANDS
 #----------------------------------------------
-@bot.command(name='hello', help='Says hello to the user.')
-async def hello(ctx):
-    await ctx.send(f'Hello {ctx.author.mention}!')
-
-
-
-
-
 @bot.command(name='randimg', help='Sends a random image from Wikimedia Commons.')
 async def randimg(ctx):
     url = "https://commons.wikimedia.org/w/api.php?action=query&format=json&list=random&rnnamespace=6&rnlimit=1"
