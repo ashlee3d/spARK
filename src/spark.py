@@ -1,20 +1,31 @@
 import os
 import io
-import asyncio  # might conflict with io
-import aiohttp
 import random
+import time
+import json
+import base64
+
+import asyncio
+import aiohttp
+
+from debugtools import apitool
 import sparkutils  # custom utility library
+
 import discord  # discord api
 import requests  # enable web requests
 import importlib  # dynamic function importing
+
+
 from dotenv import load_dotenv  # for file-based OAuth
 from discord.ext import commands  # i command ye
 from discord import Embed  # pretty embeds
-import json
-import base64
+
 from PIL import Image, PngImagePlugin
 
-
+API_URL="http://127.0.0.1:7860/"
+baseprompt = "optimistic solarpunk future, humans and ai working together, harmony, sustainable architecture, vibrant flora"
+load_dotenv() # get user OAuth Token
+TOKEN = os.getenv('BOT_TOKEN')
 '''
 MODULAR FUNCTION IMPORTS
 TODO:
@@ -23,11 +34,6 @@ Add some kind of cloud sync or user code submission method
 '''
 functions_module = importlib.import_module("arcs")
 
-baseprompt = "optimistic solarpunk future, humans and ai working together, harmony, sustainable architecture, vibrant flora"
-
-# get user OAuth Token
-load_dotenv()
-TOKEN = os.getenv('BOT_TOKEN')
 
 # state our intent with the bot
 intents = discord.Intents.default()
@@ -73,8 +79,6 @@ async def on_message(message):
 '''
 # COMMANDS
 '''
-
-
 @bot.command(name='xarc', help='Executes a fucntion from arcs.py.')
 async def xarc(ctx, function_name: str, *args: str):
     print(sparkutils.ctx_info(ctx))
@@ -120,11 +124,31 @@ async def invert(ctx):
         output.seek(0)
         await ctx.send(file=discord.File(output, "inverted_image.png"))
 
+
+@bot.command()
+async def refresh_image(ctx):
+    # Function to generate a new image URL
+    def get_new_image_url():
+        # Replace this line with the logic to get a new image URL from your API
+        return f'https://via.placeholder.com/300x300.png?text={int(time.time())}'
+
+    # Send an initial message with the image
+    image_url = get_new_image_url()
+    embed = discord.Embed()
+    embed.set_image(url=image_url)
+    message = await ctx.send(embed=embed)
+
+    # Update the message with a new image every 5 seconds
+    while True:
+        await asyncio.sleep(5)
+        image_url = get_new_image_url()
+        embed = discord.Embed()
+        embed.set_image(url=image_url)
+        await message.edit(embed=embed)
+
 '''
 TEXT2IMAGE USING AUTOMATIC1111 API
 '''
-
-
 @bot.command(
     name='text2img',
     aliases=['t2i', 'dream'],
@@ -148,6 +172,12 @@ async def t2i(
     batchsize: int = commands.parameter(
         default=1, description="Number of images to generate in a batch")
 ):
+    payload = {
+    "prompt": prompt,
+    "steps": quality*10,
+    "batch_size": batchsize,
+    "cfg_scale": guidance
+    }
     url = "http://127.0.0.1:7860"
     try:
         health_check = requests.get(url)
@@ -157,37 +187,28 @@ async def t2i(
     except requests.exceptions.RequestException as e:
         await ctx.send(f"Error connecting to the web service: {e}")
         return
-
-    payload = {
-        "prompt": prompt,
-        "steps": quality*10,
-        "batch_size": batchsize,
-        "cfg_scale": guidance
-    }
-
     response = requests.post(url=f'{url}/sdapi/v1/txt2img', json=payload)
     r = response.json()
-    
+
     for i in r['images']:
         image = Image.open(io.BytesIO(base64.b64decode(i.split(",", 1)[0])))
 
         png_payload = {
             "image": "data:image/png;base64," + i
         }
-        imgreponse = requests.post(
-            url=f'{url}/sdapi/v1/png-info', json=png_payload)
+        response2 = requests.post(url=f'{url}/sdapi/v1/png-info', json=png_payload)
 
         pnginfo = PngImagePlugin.PngInfo()
-        pnginfo.add_text("parameters", imgreponse.json().get("info"))
+        pnginfo.add_text("parameters", response2.json().get("info"))
 
         with io.BytesIO() as output:
             image.save(output, format='PNG', pnginfo=pnginfo)
             output.seek(0)
             await ctx.send(file=discord.File(output, "output.png"))
+    
 '''
 Command Example
 '''
-
 
 @bot.command(
     name='example',
